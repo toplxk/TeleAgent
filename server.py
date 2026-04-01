@@ -3,30 +3,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, HTTPException, UploadFile
-from langchain.agents import AgentExecutor, create_react_agent
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts import PromptTemplate
-from langchain_community.llms import tongyi
 
+from AutoAgent import ReactAgent
 from Embedding import Embedding
-from tools.NetWorkSearch import net_work_search
-from tools.tools import get_weather, multipy
 
 
 load_dotenv()
-QIANWEN_API_KEY = os.getenv("QIANWEN_API_KEY")
 PROMPT_PATH = Path(__file__).with_name("prompt.txt")
 
 app = FastAPI()
-prompt = PromptTemplate.from_template(PROMPT_PATH.read_text(encoding="utf-8"))
-
-memory = ConversationBufferMemory(
-    memory_key="chat_history",
-    input_key="input",
-    return_messages=False,
-)
-
-TOOLS = [multipy, get_weather, net_work_search]
 
 
 @app.get("/")
@@ -40,24 +25,15 @@ def chat(input: str):
     db = Embedding().db
     # 向量搜索
     results = db.similarity_search_with_relevance_scores(input, k=5)
-    for doc, source in results:
-        print("内容：", doc.page_content)
-        print("匹配度：", source)
-        input += f"\n\n以下是来自文档中的匹配内容：\n\n{doc.page_content}"
 
-    llm = tongyi.Tongyi(api_key=QIANWEN_API_KEY)
-    agent = create_react_agent(
-        llm=llm,
-        tools=TOOLS,
-        prompt=prompt,
-    )
-    agent_executor = AgentExecutor(
-        agent=agent,
-        tools=TOOLS,
-        memory=memory,
-        verbose=True,
-    )
-    return agent_executor.invoke({"input": input})
+    rag_input = input + "\n\n以下是来自文档中的匹配内容："
+    for doc, score in results:
+        print("内容：", doc.page_content)
+        print("匹配度：", score)
+        rag_input += f"\n\n{doc.page_content}"
+
+    agent = ReactAgent()
+    return agent.think(rag_input)
 
 
 @app.post("/add_urls")
