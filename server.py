@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, UploadFile
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
@@ -39,11 +39,10 @@ def chat(input: str):
     # 加载向量数据库
     db = Embedding().db
     # 向量搜索
-    docs = db.similarity_search(input, k=5)
-    print("匹配结果")
-    for doc in docs:
+    results = db.similarity_search_with_relevance_scores(input, k=5)
+    for doc, source in results:
         print("内容：", doc.page_content)
-        print("匹配度：", doc.metadata["score"])
+        print("匹配度：", source)
         input += f"\n\n以下是来自文档中的匹配内容：\n\n{doc.page_content}"
 
     llm = tongyi.Tongyi(api_key=QIANWEN_API_KEY)
@@ -83,8 +82,10 @@ async def upload_file(file: UploadFile = File(...)):
     save_path.write_bytes(content)
     await file.close()
 
-    embedding = Embedding()
-    embedding.embedding(save_path)
+    try:
+        Embedding().embedding(save_path)
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return {"filename": filename, "save_path": str(save_path)}
 
