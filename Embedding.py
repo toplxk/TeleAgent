@@ -62,5 +62,5 @@ class Embedding:
 
         documents = loader.load()
         splits = self.text_splitter.split_documents(documents)
-        self.db.add_documents(splits)
+        self.db.add_documents(splits)ss
         self.db.persist()
